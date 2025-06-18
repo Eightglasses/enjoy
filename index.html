@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>贴图工具</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f7;
+            color: #1d1d1f;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .storage-info {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .actions button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #0071e3;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .actions button:hover {
+            background: #0077ed;
+        }
+
+        .history-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .history-item {
+            position: relative;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .history-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .history-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            cursor: pointer;
+        }
+
+        .history-item .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+
+        .history-item:hover .controls {
+            opacity: 1;
+        }
+
+        .control-button {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .control-button:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .save-button {
+            background: rgba(46, 204, 113, 0.5);
+        }
+
+        .save-button:hover {
+            background: rgba(46, 204, 113, 0.7);
+        }
+
+        .delete-button {
+            background: rgba(231, 76, 60, 0.5);
+        }
+
+        .delete-button:hover {
+            background: rgba(231, 76, 60, 0.7);
+        }
+
+        .timestamp {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            display: block;
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% {
+                opacity: 0;
+            }
+
+            20% {
+                opacity: 1;
+            }
+
+            80% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>贴图工具</h1>
+            <div class="storage-info">
+                <div>已用空间: <span id="used-size">0 MB</span></div>
+                <div>可用空间: <span id="available-size">0 GB</span></div>
+                <div>记录数量: <span id="total-count">0</span></div>
+            </div>
+            <div class="actions">
+                <button id="clear-history">清空历史</button>
+            </div>
+        </div>
+        <div id="history-list" class="history-list"></div>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        let history = [];
+
+        // 更新存储信息
+        function updateStorageInfo(info) {
+            const usedSizeElement = document.getElementById('used-size');
+            const availableSizeElement = document.getElementById('available-size');
+            const totalCountElement = document.getElementById('total-count');
+
+            if (usedSizeElement) usedSizeElement.textContent = info.usedSize;
+            if (availableSizeElement) availableSizeElement.textContent = info.availableSize;
+            if (totalCountElement) totalCountElement.textContent = info.totalCount;
+        }
+
+        // 显示提示信息
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        // 监听保存结果
+        ipcRenderer.on('save-success', (event, filename) => {
+            showToast(`已保存为: ${filename}`);
+        });
+
+        ipcRenderer.on('save-error', (event, error) => {
+            showToast(`保存失败: ${error}`);
+        });
+
+        // 监听历史记录加载完成
+        ipcRenderer.on('history-loaded', (event, loadedHistory) => {
+            console.log('History loaded:', loadedHistory);
+            history = loadedHistory;
+            updateHistoryDisplay();
+        });
+
+        // 监听历史记录更新
+        ipcRenderer.on('history-updated', (event, newHistory) => {
+            console.log('History updated:', newHistory);
+            history = newHistory;
+            updateHistoryDisplay();
+        });
+
+        // 监听存储信息更新
+        ipcRenderer.on('storage-info-updated', (event, info) => {
+            updateStorageInfo(info);
+        });
+
+        // 显示图片
+        function showImage(index) {
+            if (history[index]) {
+                ipcRenderer.send('show-image', history[index].imageData);
+            }
+        }
+
+        // 保存图片
+        function saveImageFromHistory(imageData, event) {
+            console.log("saveImageFromHistory");
+
+            event.stopPropagation();
+            ipcRenderer.send('save-image-from-history', imageData);
+        }
+
+        // 删除历史记录
+        function deleteItem(id, event) {
+            event.stopPropagation();
+            if (confirm('确定要删除这张图片吗？')) {
+                ipcRenderer.send('delete-history-item', id);
+            }
+        }
+
+        function updateHistoryDisplay() {
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = history.map((item, index) => `
+                <div class="history-item">
+                    <img src="${item.imageData}" alt="历史图片 ${index + 1}" onclick="showImage(${index})">
+                    <div class="controls">
+                        <button class="control-button save-button" onclick="saveImageFromHistory('${item.imageData}', event)" title="保存图片">💾</button>
+                        <button class="control-button delete-button" onclick="deleteItem('${item.id}', event)" title="删除">×</button>
+                    </div>
+                    <div class="timestamp">${new Date(item.timestamp).toLocaleString()}</div>
+                </div>
+            `).join('');
+        }
+
+        // 清空历史记录
+        document.getElementById('clear-history').addEventListener('click', () => {
+            if (confirm('确定要清除所有历史记录吗？')) {
+                ipcRenderer.send('clear-history');
+            }
+        });
+    </script>
+</body>
+
+</html>

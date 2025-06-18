@@ -1,0 +1,27 @@
+{
+  "name": "image-paste-tool",
+  "version": "1.0.0",
+  "description": "图片粘贴工具",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "electron",
+    "screenshot",
+    "floating-window"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.截图.clone",
+    "mac": {
+      "category": "public.app-category.utilities"
+    }
+  }
+}
