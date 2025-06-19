@@ -9,6 +9,26 @@ const fs = require("fs");
 // 隐藏 Dock 图标
 app.dock.hide();
 
+// 设置开机启动
+function setAutoLaunch(enabled) {
+  if (process.platform === "darwin") {
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      openAsHidden: true,
+      path: app.getPath("exe"),
+    });
+  }
+}
+
+// 获取开机启动状态
+function getAutoLaunchStatus() {
+  if (process.platform === "darwin") {
+    const settings = app.getLoginItemSettings();
+    return settings.openAtLogin;
+  }
+  return false;
+}
+
 // 全局变量
 global.app = app;
 global.clipboard = clipboard;
@@ -16,6 +36,8 @@ global.windowManager = windowManager;
 global.storage = storage;
 global.shortcut = shortcutManager;
 global.historyData = [];
+global.setAutoLaunch = setAutoLaunch;
+global.getAutoLaunchStatus = getAutoLaunchStatus;
 
 // 初始化应用
 function init() {
@@ -194,6 +216,20 @@ function setupEventListeners() {
       console.error("保存图片失败:", error);
       event.reply("save-image-result", false, error.message);
     }
+  });
+
+  // 监听开机启动状态查询
+  ipcMain.on("get-auto-launch-status", (event) => {
+    const enabled = getAutoLaunchStatus();
+    event.sender.send("auto-launch-status", enabled);
+  });
+
+  // 监听开机启动开关切换
+  ipcMain.on("toggle-auto-launch", (event) => {
+    const currentStatus = getAutoLaunchStatus();
+    const newStatus = !currentStatus;
+    setAutoLaunch(newStatus);
+    event.sender.send("auto-launch-status", newStatus);
   });
 }
 

@@ -225,6 +225,7 @@
             </div>
             <div class="actions">
                 <button id="clear-history">清空历史</button>
+                <button id="auto-launch-toggle">开机启动</button>
             </div>
         </div>
         <div id="history-list" class="history-list"></div>
@@ -334,6 +335,21 @@
                 ipcRenderer.send('clear-history');
             }
         });
+
+        // 开机启动设置
+        document.getElementById('auto-launch-toggle').addEventListener('click', () => {
+            ipcRenderer.send('toggle-auto-launch');
+        });
+
+        // 监听开机启动状态更新
+        ipcRenderer.on('auto-launch-status', (event, enabled) => {
+            const button = document.getElementById('auto-launch-toggle');
+            button.textContent = enabled ? '关闭开机启动' : '开启开机启动';
+            button.style.background = enabled ? '#ff3b30' : '#0071e3';
+        });
+
+        // 初始化开机启动按钮状态
+        ipcRenderer.send('get-auto-launch-status');
     </script>
 </body>
 
