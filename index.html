@@ -136,6 +136,14 @@
             background: rgba(46, 204, 113, 0.7);
         }
 
+        .edit-button {
+            background: rgba(52, 152, 219, 0.5);
+        }
+
+        .edit-button:hover {
+            background: rgba(52, 152, 219, 0.7);
+        }
+
         .delete-button {
             background: rgba(231, 76, 60, 0.5);
         }
@@ -299,6 +307,12 @@
             }
         }
 
+        // 编辑图片
+        function editImage(imageData, event) {
+            event.stopPropagation();
+            ipcRenderer.send('edit-image', imageData);
+        }
+
         function updateHistoryDisplay() {
             const historyList = document.getElementById('history-list');
             historyList.innerHTML = history.map((item, index) => `
@@ -306,6 +320,7 @@
                     <img src="${item.imageData}" alt="历史图片 ${index + 1}" onclick="showImage(${index})">
                     <div class="controls">
                         <button class="control-button save-button" onclick="saveImageFromHistory('${item.imageData}', event)" title="保存图片">💾</button>
+                        <button class="control-button edit-button" onclick="editImage('${item.imageData}', event)" title="编辑">✏️</button>
                         <button class="control-button delete-button" onclick="deleteItem('${item.id}', event)" title="删除">×</button>
                     </div>
                     <div class="timestamp">${new Date(item.timestamp).toLocaleString()}</div>

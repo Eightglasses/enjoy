@@ -157,6 +157,44 @@ function setupEventListeners() {
       event.sender.send("save-error", error.message);
     }
   });
+
+  // 监听编辑图片的请求
+  ipcMain.on("edit-image", (event, imageData) => {
+    windowManager.createEditWindow(imageData);
+  });
+
+  // 监听保存编辑后的图片
+  ipcMain.on("save-edited-image", async (event, imageData) => {
+    try {
+      // 打开保存对话框
+      const { filePath } = await dialog.showSaveDialog({
+        title: "保存图片",
+        defaultPath: path.join(app.getPath("pictures"), "edited-image.png"),
+        filters: [
+          { name: "PNG 图片", extensions: ["png"] },
+          { name: "JPEG 图片", extensions: ["jpg", "jpeg"] },
+        ],
+      });
+
+      if (!filePath) {
+        event.reply("save-image-result", false, "已取消保存");
+        return;
+      }
+
+      // 将 base64 图片数据转换为 Buffer
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+
+      // 保存文件
+      await fs.promises.writeFile(filePath, buffer);
+
+      // 发送成功消息
+      event.reply("save-image-result", true);
+    } catch (error) {
+      console.error("保存图片失败:", error);
+      event.reply("save-image-result", false, error.message);
+    }
+  });
 }
 
 // 应用准备就绪

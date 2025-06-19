@@ -107,6 +107,27 @@ class WindowManager {
     return this.floatingWindows.get(imageHash);
   }
 
+  createEditWindow(imageData) {
+    const editWindow = new BrowserWindow({
+      width: 1000,
+      height: 800,
+      show: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+      },
+    });
+
+    editWindow.loadFile("edit.html");
+
+    editWindow.webContents.on("did-finish-load", () => {
+      editWindow.webContents.send("set-image", imageData);
+      editWindow.show();
+    });
+
+    return editWindow;
+  }
+
   showMainWindow() {
     if (this.mainWindow) {
       this.mainWindow.show();
