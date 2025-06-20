@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>贴图</title>
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: transparent;
+            -webkit-app-region: drag;
+        }
+
+        #image-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #floating-image {
+            max-width: 100%;
+            max-height: 100%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            -webkit-app-region: no-drag;
+        }
+
+        #image-container:hover .controls {
+            opacity: 1;
+        }
+
+        .save-btn {
+            background: linear-gradient(135deg, #2ecc71, #27ae60) !important;
+            border: none !important;
+            color: white !important;
+        }
+
+        .close-btn {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="image-container">
+            <img id="floating-image" :src="imageData" alt="贴图" @load="onImageLoad" />
+            <div class="controls">
+                <el-button class="save-btn" @click="saveImage" circle size="small" title="保存图片">
+                    <el-icon>
+                        <Download />
+                    </el-icon>
+                </el-button>
+                <el-button class="close-btn" @click="closeWindow" circle size="small" title="关闭">
+                    <el-icon>
+                        <Close />
+                    </el-icon>
+                </el-button>
+            </div>
+        </div>
+
+        <!-- Toast消息 -->
+        <div v-if="toastVisible" class="toast-message">
+            {{ toastMessage }}
+        </div>
+    </div>
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Element Plus -->
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <!-- Element Plus 图标 -->
+    <script src="https://unpkg.com/@element-plus/icons-vue/dist/index.iife.min.js"></script>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        const { ElButton, ElIcon, ElMessage } = ElementPlus;
+
+        createApp({
+            components: {
+                ElButton,
+                ElIcon,
+                Download: ElementPlusIconsVue.Download,
+                Close: ElementPlusIconsVue.Close
+            },
+            setup() {
+                const imageData = ref('');
+                const toastVisible = ref(false);
+                const toastMessage = ref('');
+
+                let ipcRenderer = null;
+
+                // 初始化
+                onMounted(() => {
+                    try {
+                        const electron = require('electron');
+                        ipcRenderer = electron.ipcRenderer;
+                        console.log('浮动窗口 Electron 模块加载成功');
+
+                        // 监听图片数据设置
+                        ipcRenderer.on('set-image', (event, data) => {
+                            console.log('设置图片数据:', data ? '有数据' : '无数据');
+                            imageData.value = data;
+                        });
+
+                        // 监听保存结果
+                        ipcRenderer.on('save-success', (event, filename) => {
+                            showToast(`已保存为: ${filename}`);
+                        });
+
+                        ipcRenderer.on('save-error', (event, error) => {
+                            showToast(`保存失败: ${error}`);
+                        });
+                    } catch (error) {
+                        console.error('浮动窗口初始化失败:', error);
+                    }
+                });
+
+                // 图片加载完成
+                const onImageLoad = () => {
+                    console.log('图片加载完成');
+                };
+
+                // 保存图片
+                const saveImage = () => {
+                    if (ipcRenderer) {
+                        ipcRenderer.send('save-image');
+                    } else {
+                        showToast('无法保存：IPC 通信未初始化');
+                    }
+                };
+
+                // 关闭窗口
+                const closeWindow = () => {
+                    window.close();
+                };
+
+                // 显示提示信息
+                const showToast = (message) => {
+                    toastMessage.value = message;
+                    toastVisible.value = true;
+                    setTimeout(() => {
+                        toastVisible.value = false;
+                    }, 2000);
+                };
+
+                return {
+                    imageData,
+                    toastVisible,
+                    toastMessage,
+                    onImageLoad,
+                    saveImage,
+                    closeWindow
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+
+    <style>
+        .toast-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% {
+                opacity: 0;
+            }
+
+            20% {
+                opacity: 1;
+            }
+
+            80% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+    </style>
+</body>
+
+</html>

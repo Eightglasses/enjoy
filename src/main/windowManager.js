@@ -13,7 +13,8 @@ class WindowManager {
       ...WINDOW_CONFIG,
       skipTaskbar: false, // 在任务栏显示
     });
-    this.mainWindow.loadFile("index.html");
+    this.mainWindow.loadFile("index-vue.html");
+    console.log("主窗口加载: index-vue.html (Vue版本)");
 
     // 窗口关闭时隐藏而不是退出
     this.mainWindow.on("close", (event) => {
@@ -71,7 +72,8 @@ class WindowManager {
       },
     });
 
-    floatingWindow.loadFile("floating.html");
+    floatingWindow.loadFile("floating-vue.html");
+    console.log("浮动窗口加载: floating-vue.html (Vue版本)");
 
     // 存储窗口和图片的对应关系
     const imageHash = global.storage.getImageHash(imageData);

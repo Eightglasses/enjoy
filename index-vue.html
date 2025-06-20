@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>贴图工具</title>
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f7;
+            color: #1d1d1f;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .storage-info {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .history-item {
+            position: relative;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .history-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .history-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+
+        .history-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+
+        .history-item:hover .history-controls {
+            opacity: 1;
+        }
+
+        .timestamp {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="container">
+            <!-- 头部 -->
+            <div class="header">
+                <h1>贴图工具</h1>
+
+                <!-- 存储信息 -->
+                <div class="storage-info">
+                    <div>已用空间: <span>{{ storageInfo.usedSize }}</span></div>
+                    <div>可用空间: <span>{{ storageInfo.availableSize }}</span></div>
+                    <div>记录数量: <span>{{ storageInfo.totalCount }}</span></div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="actions">
+                    <el-button @click="openStorageFolder" type="primary">
+                        <el-icon>
+                            <FolderOpened />
+                        </el-icon>
+                        打开存储位置
+                    </el-button>
+                    <el-button @click="clearHistory" type="danger">
+                        <el-icon>
+                            <Delete />
+                        </el-icon>
+                        清空历史
+                    </el-button>
+                    <el-button v-if="!autoLaunchEnabled" @click="enableAutoLaunch" type="success">
+                        <el-icon>
+                            <Setting />
+                        </el-icon>
+                        开机启动
+                    </el-button>
+                </div>
+            </div>
+
+            <!-- 历史记录网格 -->
+            <div class="history-grid">
+                <!-- 空状态 -->
+                <div v-if="history.length === 0" class="empty-state">
+                    <el-empty description="暂无历史记录" />
+                </div>
+
+                <!-- 历史记录项 -->
+                <div v-for="(item, index) in history" :key="item.id" class="history-item" @click="showImage(index)">
+                    <img :src="item.imageData" :alt="`历史图片 ${index + 1}`" />
+
+                    <!-- 控制按钮 -->
+                    <div class="history-controls" @click.stop>
+                        <el-button @click="saveImageFromHistory(item.imageData)" circle size="small" type="success" title="保存图片">
+                            <el-icon>
+                                <Download />
+                            </el-icon>
+                        </el-button>
+                        <el-button @click="editImage(item.imageData)" circle size="small" type="primary" title="编辑">
+                            <el-icon>
+                                <Edit />
+                            </el-icon>
+                        </el-button>
+                        <el-button @click="deleteItem(item.id)" circle size="small" type="danger" title="删除">
+                            <el-icon>
+                                <Delete />
+                            </el-icon>
+                        </el-button>
+                    </div>
+
+                    <!-- 时间戳 -->
+                    <div class="timestamp">
+                        {{ formatTime(item.timestamp) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Element Plus -->
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <!-- Element Plus 图标 -->
+    <script src="https://unpkg.com/@element-plus/icons-vue/dist/index.iife.min.js"></script>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        const { ElButton, ElIcon, ElEmpty, ElMessageBox, ElMessage } = ElementPlus;
+
+        createApp({
+            components: {
+                ElButton,
+                ElIcon,
+                ElEmpty,
+                Download: ElementPlusIconsVue.Download,
+                Edit: ElementPlusIconsVue.Edit,
+                Delete: ElementPlusIconsVue.Delete,
+                FolderOpened: ElementPlusIconsVue.FolderOpened,
+                Setting: ElementPlusIconsVue.Setting
+            },
+            setup() {
+                const history = ref([]);
+                const autoLaunchEnabled = ref(false);
+                const storageInfo = ref({
+                    usedSize: '0 MB',
+                    availableSize: '0 GB',
+                    totalCount: '0'
+                });
+
+                let ipcRenderer = null;
+
+                // 初始化
+                onMounted(() => {
+                    try {
+                        const electron = require('electron');
+                        ipcRenderer = electron.ipcRenderer;
+                        console.log('主窗口 Electron 模块加载成功');
+
+                        // 监听历史记录加载完成
+                        ipcRenderer.on('history-loaded', (event, loadedHistory) => {
+                            console.log('History loaded:', loadedHistory);
+                            history.value = loadedHistory;
+                        });
+
+                        // 监听历史记录更新
+                        ipcRenderer.on('history-updated', (event, newHistory) => {
+                            console.log('History updated:', newHistory);
+                            history.value = newHistory;
+                        });
+
+                        // 监听存储信息更新
+                        ipcRenderer.on('storage-info-updated', (event, info) => {
+                            storageInfo.value = info;
+                        });
+
+                        // 监听保存结果
+                        ipcRenderer.on('save-success', (event, filename) => {
+                            ElMessage.success(`已保存为: ${filename}`);
+                        });
+
+                        ipcRenderer.on('save-error', (event, error) => {
+                            ElMessage.error(`保存失败: ${error}`);
+                        });
+
+                        // 监听文件夹打开错误
+                        ipcRenderer.on('folder-open-error', (event, error) => {
+                            ElMessage.error(`打开文件夹失败: ${error}`);
+                        });
+
+                        // 监听开机启动状态更新
+                        ipcRenderer.on('auto-launch-status', (event, enabled) => {
+                            autoLaunchEnabled.value = enabled;
+                        });
+
+                        // 监听开机启动成功开启
+                        ipcRenderer.on('auto-launch-enabled', (event, enabled) => {
+                            if (enabled) {
+                                autoLaunchEnabled.value = true;
+                                ElMessage.success('已开启开机启动');
+                            } else {
+                                ElMessage.error('开启开机启动失败');
+                            }
+                        });
+
+                        // 监听自动启动错误信息
+                        ipcRenderer.on('auto-launch-error', (event, errorMessage) => {
+                            ElMessage.error(errorMessage);
+                        });
+
+                        // 初始化开机启动按钮状态
+                        ipcRenderer.send('get-auto-launch-status');
+                    } catch (error) {
+                        console.error('主窗口初始化失败:', error);
+                    }
+                });
+
+                // 显示图片
+                const showImage = (index) => {
+                    if (history.value[index] && ipcRenderer) {
+                        ipcRenderer.send('show-image', history.value[index].imageData);
+                    }
+                };
+
+                // 保存图片
+                const saveImageFromHistory = (imageData) => {
+                    console.log("saveImageFromHistory");
+                    if (ipcRenderer) {
+                        ipcRenderer.send('save-image-from-history', imageData);
+                    }
+                };
+
+                // 删除历史记录
+                const deleteItem = (id) => {
+                    ElMessageBox.confirm('确定要删除这张图片吗？', '确认删除', {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning',
+                    }).then(() => {
+                        if (ipcRenderer) {
+                            ipcRenderer.send('delete-history-item', id);
+                        }
+                    }).catch(() => {
+                        // 用户取消删除
+                    });
+                };
+
+                // 编辑图片
+                const editImage = (imageData) => {
+                    if (ipcRenderer) {
+                        ipcRenderer.send('edit-image', imageData);
+                    }
+                };
+
+                // 打开存储位置
+                const openStorageFolder = () => {
+                    if (ipcRenderer) {
+                        ipcRenderer.send('open-storage-folder');
+                    }
+                };
+
+                // 清空历史记录
+                const clearHistory = () => {
+                    ElMessageBox.confirm('确定要清除所有历史记录吗？', '确认清空', {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning',
+                    }).then(() => {
+                        if (ipcRenderer) {
+                            ipcRenderer.send('clear-history');
+                        }
+                    }).catch(() => {
+                        // 用户取消清空
+                    });
+                };
+
+                // 开机启动设置
+                const enableAutoLaunch = () => {
+                    if (ipcRenderer) {
+                        ipcRenderer.send('enable-auto-launch');
+                    }
+                };
+
+                // 格式化时间
+                const formatTime = (timestamp) => {
+                    return new Date(timestamp).toLocaleString();
+                };
+
+                return {
+                    history,
+                    autoLaunchEnabled,
+                    storageInfo,
+                    showImage,
+                    saveImageFromHistory,
+                    deleteItem,
+                    editImage,
+                    openStorageFolder,
+                    clearHistory,
+                    enableAutoLaunch,
+                    formatTime
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+
+</html>
