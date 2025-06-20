@@ -41,7 +41,7 @@
       "*.html",
       "*.js",
       "package.json",
-      "node_modules/**/*"
+      "!node_modules/**/*"
     ],
     "asarUnpack": [
       "icon.png"
@@ -74,7 +74,11 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "entitlements.mac.plist",
-      "entitlementsInherit": "entitlements.mac.plist"
+      "entitlementsInherit": "entitlements.mac.plist",
+      "extendInfo": {
+        "LSUIElement": false,
+        "NSAppleEventsUsageDescription": "此应用需要 Apple Events 权限来设置开机启动"
+      }
     },
     "win": {
       "target": [

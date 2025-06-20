@@ -5,6 +5,7 @@ class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.floatingWindows = new Map();
+    this.isWindowHidden = false; // 跟踪窗口是否被手动隐藏
   }
 
   createMainWindow() {
@@ -17,9 +18,13 @@ class WindowManager {
     // 窗口关闭时隐藏而不是退出
     this.mainWindow.on("close", (event) => {
       if (!global.app.isQuitting) {
+        console.log("窗口关闭事件 - 阻止关闭并隐藏窗口");
         event.preventDefault();
         this.mainWindow.hide();
+        this.isWindowHidden = true; // 标记窗口被隐藏
         return false;
+      } else {
+        console.log("应用正在退出 - 允许窗口关闭");
       }
     });
 
@@ -61,6 +66,8 @@ class WindowManager {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
+        enableRemoteModule: true,
+        webSecurity: false, // 打包后需要这个设置
       },
     });
 
@@ -74,20 +81,27 @@ class WindowManager {
       floatingWindow.webContents.send("set-image", imageData);
     });
 
-    // 监听 ESC 键
+    // 浮动窗口获得焦点时注册快捷键
     floatingWindow.on("focus", () => {
+      console.log("浮动窗口获得焦点，注册快捷键");
       if (global.shortcut) {
+        // 注册ESC关闭快捷键
         global.shortcut.register(SHORTCUTS.CLOSE, () => {
           floatingWindow.close();
           this.floatingWindows.delete(imageHash);
         });
+
+        // 注册F12开发者工具快捷键
+        global.shortcut.registerDevToolsShortcut();
       }
     });
 
-    // 窗口失去焦点时注销快捷键
+    // 浮动窗口失去焦点时注销快捷键
     floatingWindow.on("blur", () => {
+      console.log("浮动窗口失去焦点，注销快捷键");
       if (global.shortcut) {
         global.shortcut.unregister(SHORTCUTS.CLOSE);
+        global.shortcut.unregisterDevToolsShortcut();
       }
     });
 
@@ -115,6 +129,8 @@ class WindowManager {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
+        enableRemoteModule: true,
+        webSecurity: false, // 打包后需要这个设置
       },
     });
 
@@ -125,29 +141,89 @@ class WindowManager {
       editWindow.show();
     });
 
+    // 编辑窗口获得焦点时注册F12快捷键
+    editWindow.on("focus", () => {
+      console.log("编辑窗口获得焦点，注册F12快捷键");
+      if (global.shortcut) {
+        global.shortcut.registerDevToolsShortcut();
+      }
+    });
+
+    // 编辑窗口失去焦点时注销F12快捷键
+    editWindow.on("blur", () => {
+      console.log("编辑窗口失去焦点，注销F12快捷键");
+      if (global.shortcut) {
+        global.shortcut.unregisterDevToolsShortcut();
+      }
+    });
+
     return editWindow;
   }
 
   showMainWindow() {
-    if (this.mainWindow) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      console.log("显示主窗口");
+
+      // 如果窗口被最小化，先恢复
+      if (this.mainWindow.isMinimized()) {
+        console.log("恢复最小化的窗口");
+        this.mainWindow.restore();
+      }
+
+      // 显示并聚焦窗口
       this.mainWindow.show();
       this.mainWindow.focus();
+      this.isWindowHidden = false; // 重置隐藏状态
+
+      // 确保窗口在最前面
+      this.mainWindow.setAlwaysOnTop(true);
+      setTimeout(() => {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.setAlwaysOnTop(false);
+        }
+      }, 100);
+    } else {
+      console.log("主窗口不存在或已销毁，无法显示");
     }
   }
 
   hideMainWindow() {
     if (this.mainWindow) {
+      console.log("隐藏主窗口");
       this.mainWindow.hide();
+      this.isWindowHidden = true; // 标记窗口被隐藏
     }
   }
 
   toggleMainWindow() {
-    if (this.mainWindow) {
-      if (this.mainWindow.isVisible()) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const isVisible = this.mainWindow.isVisible();
+      const isMinimized = this.mainWindow.isMinimized();
+
+      console.log("切换主窗口状态:", {
+        isVisible,
+        isMinimized,
+        isWindowHidden: this.isWindowHidden,
+        windowExists: !!this.mainWindow,
+      });
+
+      // 使用状态跟踪来改善判断逻辑
+      if (this.isWindowHidden || !isVisible || isMinimized) {
+        console.log("窗口被隐藏/不可见/最小化 -> 显示窗口");
+        this.showMainWindow();
+      } else if (isVisible && !isMinimized) {
+        console.log("窗口可见且未最小化 -> 隐藏窗口");
         this.hideMainWindow();
       } else {
+        // 备用逻辑：强制显示
+        console.log("状态不明确，强制显示窗口");
         this.showMainWindow();
       }
+    } else {
+      console.log("主窗口不存在或已销毁，重新创建");
+      const mainWindow = this.createMainWindow();
+      mainWindow.show();
+      this.isWindowHidden = false;
     }
   }
 }

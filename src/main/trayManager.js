@@ -69,8 +69,19 @@ class TrayManager {
     this.updateContextMenu();
 
     // 点击托盘图标显示/隐藏主窗口
-    this.tray.on("click", () => {
-      global.windowManager.toggleMainWindow();
+    this.tray.on("click", (event, bounds) => {
+      console.log("托盘图标被点击");
+
+      // 在macOS上，有时候需要延迟一下再执行
+      setTimeout(() => {
+        global.windowManager.toggleMainWindow();
+      }, 50);
+    });
+
+    // macOS 上的右键点击（有些情况下会更可靠）
+    this.tray.on("right-click", () => {
+      console.log("托盘图标右键点击");
+      this.tray.popUpContextMenu();
     });
   }
 
@@ -79,7 +90,15 @@ class TrayManager {
       {
         label: "显示主窗口",
         click: () => {
+          console.log("通过菜单显示主窗口");
           global.windowManager.showMainWindow();
+        },
+      },
+      {
+        label: "隐藏主窗口",
+        click: () => {
+          console.log("通过菜单隐藏主窗口");
+          global.windowManager.hideMainWindow();
         },
       },
       { type: "separator" },

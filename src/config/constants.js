@@ -13,6 +13,8 @@ module.exports = {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
+      enableRemoteModule: true,
+      webSecurity: false, // 打包后需要这个设置
     },
   },
 

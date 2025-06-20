@@ -58,11 +58,24 @@ class ShortcutManager {
   }
 
   registerDevToolsShortcut() {
+    console.log("注册F12开发者工具快捷键");
     this.register(SHORTCUTS.DEV_TOOLS, () => {
-      if (global.windowManager.mainWindow) {
+      console.log("F12快捷键被触发");
+      // 获取当前活动的窗口
+      const focusedWindow =
+        require("electron").BrowserWindow.getFocusedWindow();
+      if (focusedWindow && focusedWindow.webContents) {
+        focusedWindow.webContents.openDevTools();
+      } else if (global.windowManager.mainWindow) {
+        // 回退到主窗口
         global.windowManager.mainWindow.webContents.openDevTools();
       }
     });
+  }
+
+  unregisterDevToolsShortcut() {
+    console.log("注销F12开发者工具快捷键");
+    this.unregister(SHORTCUTS.DEV_TOOLS);
   }
 }
 

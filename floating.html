@@ -118,14 +118,36 @@
     </div>
     <div id="toast" class="toast"></div>
     <script>
-        const { ipcRenderer } = require('electron');
+        let ipcRenderer = null;
+
+        try {
+            // 尝试加载 Electron 模块
+            const electron = require('electron');
+            ipcRenderer = electron.ipcRenderer;
+            console.log('浮动窗口 Electron 模块加载成功');
+        } catch (error) {
+            console.error('浮动窗口初始化失败:', error);
+        }
 
         const image = document.getElementById('floating-image');
         const closeBtn = document.getElementById('close-btn');
 
-        ipcRenderer.on('set-image', (event, imageData) => {
-            image.src = imageData;
-        });
+        // 监听图片数据设置
+        if (ipcRenderer) {
+            ipcRenderer.on('set-image', (event, imageData) => {
+                console.log('设置图片数据:', imageData ? '有数据' : '无数据');
+                image.src = imageData;
+            });
+
+            // 监听保存结果
+            ipcRenderer.on('save-success', (event, filename) => {
+                showToast(`已保存为: ${filename}`);
+            });
+
+            ipcRenderer.on('save-error', (event, error) => {
+                showToast(`保存失败: ${error}`);
+            });
+        }
 
         // 关闭按钮
         closeBtn.addEventListener('click', () => {
@@ -134,7 +156,11 @@
 
         // 保存按钮
         document.getElementById('save-button').addEventListener('click', () => {
-            ipcRenderer.send('save-image');
+            if (ipcRenderer) {
+                ipcRenderer.send('save-image');
+            } else {
+                showToast('无法保存：IPC 通信未初始化');
+            }
         });
 
         // 显示提示信息
@@ -146,15 +172,6 @@
                 toast.classList.remove('show');
             }, 2000);
         }
-
-        // 监听保存结果
-        ipcRenderer.on('save-success', (event, filename) => {
-            showToast(`已保存为: ${filename}`);
-        });
-
-        ipcRenderer.on('save-error', (event, error) => {
-            showToast(`保存失败: ${error}`);
-        });
     </script>
 </body>
 

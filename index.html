@@ -171,11 +171,15 @@
             transform: translate(-50%, -50%);
             background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 10px 20px;
-            border-radius: 4px;
+            padding: 15px 25px;
+            border-radius: 6px;
             font-size: 14px;
             display: none;
             z-index: 1000;
+            max-width: 400px;
+            text-align: center;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
         .toast.show {
@@ -373,6 +377,11 @@
             } else {
                 showToast('开启开机启动失败');
             }
+        });
+
+        // 监听自动启动错误信息
+        ipcRenderer.on('auto-launch-error', (event, errorMessage) => {
+            showToast(errorMessage);
         });
 
         // 初始化开机启动按钮状态

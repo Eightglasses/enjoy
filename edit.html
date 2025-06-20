@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>图片编辑</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* 全局样式 */
         * {
@@ -109,6 +110,12 @@
             max-height: 100%;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
+            cursor: crosshair;
+            /* 裁剪模式时显示十字光标 */
+        }
+
+        canvas.crop-mode {
+            cursor: crosshair;
         }
 
         /* 操作按钮样式 */
@@ -196,6 +203,48 @@
             </div>
 
             <div class="tool-group">
+                <h3>标注工具</h3>
+                <button id="text-btn" class="tool-btn" title="文字标注">
+                    <i class="fas fa-font"></i>
+                    <span>文字</span>
+                </button>
+                <button id="draw-btn" class="tool-btn" title="画笔">
+                    <i class="fas fa-pencil-alt"></i>
+                    <span>画笔</span>
+                </button>
+                <button id="arrow-btn" class="tool-btn" title="箭头">
+                    <i class="fas fa-arrow-right"></i>
+                    <span>箭头</span>
+                </button>
+                <button id="circle-btn" class="tool-btn" title="圆圈">
+                    <i class="far fa-circle"></i>
+                    <span>圆圈</span>
+                </button>
+                <button id="rect-btn" class="tool-btn" title="矩形">
+                    <i class="far fa-square"></i>
+                    <span>矩形</span>
+                </button>
+            </div>
+
+            <div class="tool-group">
+                <h3>颜色设置</h3>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 4px 12px;">
+                    <label style="font-size: 12px; color: #86868b;">颜色:</label>
+                    <input type="color" id="color-picker" value="#ff0000" style="width: 30px; height: 30px; border: none; border-radius: 4px; cursor: pointer;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 4px 12px;">
+                    <label style="font-size: 12px; color: #86868b;">线宽:</label>
+                    <input type="range" id="line-width" min="1" max="10" value="3" style="flex: 1;">
+                    <span id="line-width-value" style="font-size: 12px; color: #1d1d1f; min-width: 20px;">3</span>
+                </div>
+                <div id="font-size-group" style="display: none; flex-direction: row; align-items: center; gap: 8px; padding: 4px 12px;">
+                    <label style="font-size: 12px; color: #86868b;">字号:</label>
+                    <input type="range" id="font-size" min="12" max="48" value="20" style="flex: 1;">
+                    <span id="font-size-value" style="font-size: 12px; color: #1d1d1f; min-width: 30px;">20px</span>
+                </div>
+            </div>
+
+            <div class="tool-group">
                 <h3>滤镜效果</h3>
                 <button class="tool-btn" onclick="applyFilter('grayscale')">
                     <i class="fas fa-adjust"></i>
@@ -254,6 +303,18 @@
         let history = [];
         let currentHistoryIndex = -1;
 
+        // 新工具状态
+        let isDrawMode = false;
+        let isTextMode = false;
+        let isArrowMode = false;
+        let isCircleMode = false;
+        let isRectMode = false;
+        let drawPath = [];
+        let currentColor = '#ff0000';
+        let currentLineWidth = 3;
+        let currentFontSize = 20;
+        let texts = []; // 存储文字标注
+
         // 显示提示信息
         function showToast(message) {
             const toast = document.getElementById('toast');
@@ -264,19 +325,7 @@
             }, 2000);
         }
 
-        // 加载图片
-        ipcRenderer.on('set-image', (event, imageData) => {
-            const img = new Image();
-            img.onload = () => {
-                originalImage = img;
-                currentImage = img;
-                resetCanvas();
-                history = [];
-                currentHistoryIndex = -1;
-                saveToHistory();
-            };
-            img.src = imageData;
-        });
+        // 加载图片（此监听器将在后面重新定义）
 
         // 保存当前状态到历史记录
         function saveToHistory() {
@@ -323,6 +372,10 @@
             canvas.width = originalImage.width;
             canvas.height = originalImage.height;
 
+            // 启用高质量绘制
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
             // 绘制图片
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(originalImage, 0, 0);
@@ -332,8 +385,87 @@
         function cancelCrop() {
             isCropMode = false;
             isDragging = false;
+            canvas.classList.remove('crop-mode');
             setActiveTool(null);
             resetCanvas();
+            showToast('已取消裁剪');
+            console.log('裁剪模式已取消');
+        }
+
+        // 初始化工具设置
+        function initializeTools() {
+            console.log('开始初始化工具设置');
+
+            const colorPicker = document.getElementById('color-picker');
+            const lineWidthSlider = document.getElementById('line-width');
+            const lineWidthValue = document.getElementById('line-width-value');
+            const fontSizeSlider = document.getElementById('font-size');
+            const fontSizeValue = document.getElementById('font-size-value');
+
+            if (!colorPicker || !lineWidthSlider || !fontSizeSlider) {
+                console.error('工具控件未找到');
+                return;
+            }
+
+            // 颜色选择器
+            colorPicker.addEventListener('change', (e) => {
+                currentColor = e.target.value;
+                console.log('选择颜色:', currentColor);
+            });
+
+            // 线宽调节
+            lineWidthSlider.addEventListener('input', (e) => {
+                currentLineWidth = parseInt(e.target.value);
+                if (lineWidthValue) {
+                    lineWidthValue.textContent = currentLineWidth;
+                }
+                console.log('线宽调节:', currentLineWidth);
+            });
+
+            // 字体大小调节
+            fontSizeSlider.addEventListener('input', (e) => {
+                currentFontSize = parseInt(e.target.value);
+                if (fontSizeValue) {
+                    fontSizeValue.textContent = currentFontSize + 'px';
+                }
+                console.log('字体大小调节:', currentFontSize);
+            });
+
+            // 检查工具按钮是否存在
+            const textBtn = document.getElementById('text-btn');
+            if (textBtn) {
+                console.log('文字按钮找到');
+            } else {
+                console.error('文字按钮未找到');
+            }
+
+            console.log('工具设置初始化完成');
+        }
+
+        // 重置所有工具模式
+        function resetAllModes() {
+            isCropMode = false;
+            isDrawMode = false;
+            isTextMode = false;
+            isArrowMode = false;
+            isCircleMode = false;
+            isRectMode = false;
+            isDragging = false;
+            drawPath = [];
+            canvas.classList.remove('crop-mode');
+            canvas.style.cursor = 'default';
+            const fontSizeGroup = document.getElementById('font-size-group');
+            if (fontSizeGroup) {
+                fontSizeGroup.style.display = 'none';
+            }
+
+            // 清理可能存在的文字输入框
+            const existingInputs = document.querySelectorAll('input[type="text"]');
+            existingInputs.forEach(input => {
+                if (input.style.zIndex === '4000') {
+                    input.remove();
+                }
+            });
         }
 
         // 添加键盘事件监听
@@ -341,6 +473,10 @@
             if (e.key === 'Escape') {
                 if (isCropMode) {
                     cancelCrop();
+                } else {
+                    resetAllModes();
+                    setActiveTool(null);
+                    showToast('已取消当前操作');
                 }
             } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
@@ -356,7 +492,10 @@
                 setActiveTool('crop');
                 isCropMode = true;
                 cropRect = null;
+                canvas.classList.add('crop-mode');
                 resetCanvas();
+                showToast('拖拽选择裁剪区域');
+                console.log('裁剪模式已激活，画布尺寸:', canvas.width, 'x', canvas.height);
             }
         });
 
@@ -546,6 +685,61 @@
             });
         });
 
+        // 文字标注工具
+        document.getElementById('text-btn').addEventListener('click', () => {
+            console.log('文字按钮被点击');
+            resetAllModes();
+            setActiveTool('text');
+            isTextMode = true;
+            canvas.style.cursor = 'text';
+            const fontSizeGroup = document.getElementById('font-size-group');
+            if (fontSizeGroup) {
+                fontSizeGroup.style.display = 'flex';
+            }
+            showToast('点击图片添加文字');
+            console.log('文字标注模式已激活, isTextMode:', isTextMode);
+        });
+
+        // 画笔工具
+        document.getElementById('draw-btn').addEventListener('click', () => {
+            resetAllModes();
+            setActiveTool('draw');
+            isDrawMode = true;
+            canvas.style.cursor = 'crosshair';
+            showToast('拖拽进行绘制');
+            console.log('画笔模式已激活');
+        });
+
+        // 箭头工具
+        document.getElementById('arrow-btn').addEventListener('click', () => {
+            resetAllModes();
+            setActiveTool('arrow');
+            isArrowMode = true;
+            canvas.style.cursor = 'crosshair';
+            showToast('拖拽绘制箭头');
+            console.log('箭头模式已激活');
+        });
+
+        // 圆圈工具
+        document.getElementById('circle-btn').addEventListener('click', () => {
+            resetAllModes();
+            setActiveTool('circle');
+            isCircleMode = true;
+            canvas.style.cursor = 'crosshair';
+            showToast('拖拽绘制圆圈');
+            console.log('圆圈模式已激活');
+        });
+
+        // 矩形工具
+        document.getElementById('rect-btn').addEventListener('click', () => {
+            resetAllModes();
+            setActiveTool('rect');
+            isRectMode = true;
+            canvas.style.cursor = 'crosshair';
+            showToast('拖拽绘制矩形');
+            console.log('矩形模式已激活');
+        });
+
         // 添加鼠标事件监听
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('mousemove', handleMouseMove);
@@ -553,100 +747,316 @@
 
         // 处理鼠标按下事件
         function handleMouseDown(e) {
-            if (!isCropMode) return;
-
             const rect = canvas.getBoundingClientRect();
-            startX = e.clientX - rect.left;
-            startY = e.clientY - rect.top;
-            isDragging = true;
-            cropStartX = startX;
-            cropStartY = startY;
+            // 计算缩放比例
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            // 转换为画布坐标
+            startX = (e.clientX - rect.left) * scaleX;
+            startY = (e.clientY - rect.top) * scaleY;
+
+            // 文字标注模式
+            if (isTextMode) {
+                console.log('检测到文字模式，调用addTextAnnotation');
+                addTextAnnotation(startX, startY);
+                return;
+            }
+
+            // 其他工具模式
+            if (isCropMode || isDrawMode || isArrowMode || isCircleMode || isRectMode) {
+                isDragging = true;
+
+                if (isCropMode) {
+                    cropStartX = startX;
+                    cropStartY = startY;
+                }
+
+                if (isDrawMode) {
+                    drawPath = [{ x: startX, y: startY }];
+
+                    // 设置高质量绘制参数
+                    ctx.strokeStyle = currentColor;
+                    ctx.lineWidth = currentLineWidth;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+
+                    // 使用亚像素精度
+                    const adjustedX = Math.round(startX) + 0.5;
+                    const adjustedY = Math.round(startY) + 0.5;
+
+                    ctx.beginPath();
+                    ctx.moveTo(adjustedX, adjustedY);
+                }
+
+                // 为箭头、圆形、矩形模式保存初始状态
+                if (isArrowMode || isCircleMode || isRectMode) {
+                    window.previewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                }
+
+                console.log('鼠标按下 - 工具模式:', {
+                    isCropMode, isDrawMode, isArrowMode, isCircleMode, isRectMode,
+                    startX, startY
+                });
+            }
         }
 
         // 处理鼠标移动事件
         function handleMouseMove(e) {
-            if (!isCropMode || !isDragging) return;
+            if (!isDragging) return;
 
             const rect = canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            const currentY = e.clientY - rect.top;
+            // 计算缩放比例
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
 
-            // 重绘画布
-            resetCanvas();
+            // 转换为画布坐标
+            const currentX = (e.clientX - rect.left) * scaleX;
+            const currentY = (e.clientY - rect.top) * scaleY;
 
-            // 绘制半透明遮罩
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 裁剪模式
+            if (isCropMode) {
+                // 重绘画布
+                resetCanvas();
 
-            // 清除裁剪区域的遮罩
-            ctx.clearRect(
-                cropStartX,
-                cropStartY,
-                currentX - cropStartX,
-                currentY - cropStartY
-            );
+                // 绘制半透明遮罩
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 绘制裁剪框
-            ctx.strokeStyle = '#0071e3';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(
-                cropStartX,
-                cropStartY,
-                currentX - cropStartX,
-                currentY - cropStartY
-            );
+                // 计算裁剪区域
+                const x = Math.min(cropStartX, currentX);
+                const y = Math.min(cropStartY, currentY);
+                const width = Math.abs(currentX - cropStartX);
+                const height = Math.abs(currentY - cropStartY);
+
+                // 确保裁剪区域在画布内
+                const clampedX = Math.max(0, Math.min(x, canvas.width));
+                const clampedY = Math.max(0, Math.min(y, canvas.height));
+                const clampedWidth = Math.min(width, canvas.width - clampedX);
+                const clampedHeight = Math.min(height, canvas.height - clampedY);
+
+                // 使用 globalCompositeOperation 来创建透明区域
+                ctx.save();
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.fillRect(clampedX, clampedY, clampedWidth, clampedHeight);
+                ctx.restore();
+
+                // 绘制裁剪框
+                ctx.strokeStyle = '#0071e3';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(clampedX, clampedY, clampedWidth, clampedHeight);
+            }
+
+            // 画笔模式
+            else if (isDrawMode) {
+                drawPath.push({ x: currentX, y: currentY });
+
+                // 使用亚像素精度和平滑插值
+                const adjustedX = Math.round(currentX) + 0.5;
+                const adjustedY = Math.round(currentY) + 0.5;
+
+                // 使用二次贝塞尔曲线进行平滑绘制
+                if (drawPath.length > 2) {
+                    const lastPoint = drawPath[drawPath.length - 2];
+                    const controlX = (lastPoint.x + currentX) / 2;
+                    const controlY = (lastPoint.y + currentY) / 2;
+                    ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, controlX, controlY);
+                } else {
+                    ctx.lineTo(adjustedX, adjustedY);
+                }
+                ctx.stroke();
+            }
+
+            // 箭头、圆圈、矩形模式 - 实时预览
+            else if (isArrowMode || isCircleMode || isRectMode) {
+                // 保存当前画布状态以便恢复
+                if (!window.previewImageData) {
+                    window.previewImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                }
+
+                // 恢复到开始绘制前的状态
+                ctx.putImageData(window.previewImageData, 0, 0);
+
+                // 设置高质量绘制样式
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentLineWidth;
+                ctx.setLineDash([]);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
+                if (isArrowMode) {
+                    drawArrow(startX, startY, currentX, currentY, true);
+                } else if (isCircleMode) {
+                    const radius = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
+                    // 使用亚像素精度
+                    const centerX = Math.round(startX) + 0.5;
+                    const centerY = Math.round(startY) + 0.5;
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                    ctx.stroke();
+                } else if (isRectMode) {
+                    const width = currentX - startX;
+                    const height = currentY - startY;
+                    // 使用亚像素精度
+                    const rectX = Math.round(startX) + 0.5;
+                    const rectY = Math.round(startY) + 0.5;
+                    ctx.strokeRect(rectX, rectY, width, height);
+                }
+            }
         }
 
         // 处理鼠标释放事件
         function handleMouseUp(e) {
-            if (!isCropMode || !isDragging) return;
+            if (!isDragging) return;
 
             const rect = canvas.getBoundingClientRect();
-            cropEndX = e.clientX - rect.left;
-            cropEndY = e.clientY - rect.top;
+            // 计算缩放比例
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
 
-            // 确保坐标是有效的
-            const x = Math.min(cropStartX, cropEndX);
-            const y = Math.min(cropStartY, cropEndY);
-            const width = Math.abs(cropEndX - cropStartX);
-            const height = Math.abs(cropEndY - cropStartY);
+            // 转换为画布坐标
+            const endX = (e.clientX - rect.left) * scaleX;
+            const endY = (e.clientY - rect.top) * scaleY;
 
-            if (width > 10 && height > 10) {
-                // 创建一个临时画布来存储原始图片
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                tempCtx.drawImage(originalImage, 0, 0);
+            // 裁剪模式
+            if (isCropMode) {
+                cropEndX = endX;
+                cropEndY = endY;
 
-                // 使用临时画布进行裁剪
-                cropImage(tempCanvas, x, y, width, height);
+                // 确保坐标是有效的
+                const x = Math.min(cropStartX, cropEndX);
+                const y = Math.min(cropStartY, cropEndY);
+                const width = Math.abs(cropEndX - cropStartX);
+                const height = Math.abs(cropEndY - cropStartY);
+
+                // 确保裁剪区域在画布内
+                const clampedX = Math.max(0, Math.min(x, canvas.width));
+                const clampedY = Math.max(0, Math.min(y, canvas.height));
+                const clampedWidth = Math.min(width, canvas.width - clampedX);
+                const clampedHeight = Math.min(height, canvas.height - clampedY);
+
+                if (clampedWidth > 10 && clampedHeight > 10) {
+                    // 执行裁剪
+                    cropImage(canvas, clampedX, clampedY, clampedWidth, clampedHeight);
+                    saveToHistory();
+                    showToast('裁剪完成');
+                } else {
+                    showToast('裁剪区域太小');
+                    resetCanvas(); // 恢复原始图片
+                }
+
+                isCropMode = false;
+                canvas.classList.remove('crop-mode');
+                setActiveTool(null);
+            }
+
+            // 画笔模式
+            else if (isDrawMode) {
                 saveToHistory();
+                showToast('绘制完成');
+            }
+
+            // 箭头模式
+            else if (isArrowMode) {
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentLineWidth;
+                ctx.setLineDash([]);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                drawArrow(startX, startY, endX, endY, false);
+                saveToHistory();
+                showToast('箭头绘制完成');
+            }
+
+            // 圆圈模式
+            else if (isCircleMode) {
+                const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentLineWidth;
+                ctx.setLineDash([]);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
+                // 使用亚像素精度
+                const centerX = Math.round(startX) + 0.5;
+                const centerY = Math.round(startY) + 0.5;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.stroke();
+                saveToHistory();
+                showToast('圆圈绘制完成');
+            }
+
+            // 矩形模式
+            else if (isRectMode) {
+                const width = endX - startX;
+                const height = endY - startY;
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentLineWidth;
+                ctx.setLineDash([]);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
+                // 使用亚像素精度
+                const rectX = Math.round(startX) + 0.5;
+                const rectY = Math.round(startY) + 0.5;
+                ctx.strokeRect(rectX, rectY, width, height);
+                saveToHistory();
+                showToast('矩形绘制完成');
             }
 
             isDragging = false;
-            isCropMode = false;
-            setActiveTool(null);
+
+            // 清理预览状态
+            if (window.previewImageData) {
+                window.previewImageData = null;
+            }
         }
 
         // 裁剪图片
         function cropImage(sourceCanvas, x, y, width, height) {
+            // 确保坐标和尺寸是整数
+            x = Math.floor(x);
+            y = Math.floor(y);
+            width = Math.floor(width);
+            height = Math.floor(height);
+
+            // 创建临时画布用于裁剪
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
-
             tempCanvas.width = width;
             tempCanvas.height = height;
 
+            // 从源画布复制指定区域
             tempCtx.drawImage(
                 sourceCanvas,
                 x, y, width, height,
                 0, 0, width, height
             );
 
+            // 更新主画布
             canvas.width = width;
             canvas.height = height;
+            ctx.clearRect(0, 0, width, height);
             ctx.drawImage(tempCanvas, 0, 0);
+
+            // 更新原始图片引用
+            const img = new Image();
+            img.onload = function () {
+                originalImage = img;
+            };
+            img.src = canvas.toDataURL();
         }
 
         // 调整图片大小
@@ -682,13 +1092,17 @@
         function setActiveTool(tool) {
             currentTool = tool;
             // 移除所有按钮的active类
-            document.querySelectorAll('.tool-button').forEach(btn => {
+            document.querySelectorAll('.tool-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             // 为当前工具按钮添加active类
             if (tool) {
-                document.getElementById(`${tool}-btn`).classList.add('active');
+                const button = document.getElementById(`${tool}-btn`);
+                if (button) {
+                    button.classList.add('active');
+                }
             }
+            console.log('设置活动工具:', tool);
         }
 
         // 滤镜效果
@@ -763,6 +1177,227 @@
                 showToast(message || '保存失败');
             }
         });
+
+        // 文字标注功能 - 直接在画布上输入
+        function addTextAnnotation(canvasX, canvasY) {
+            console.log('点击位置添加文字:', canvasX, canvasY);
+
+            // 获取画布在页面中的位置
+            const canvasRect = canvas.getBoundingClientRect();
+            const scaleX = canvasRect.width / canvas.width;
+            const scaleY = canvasRect.height / canvas.height;
+
+            // 计算输入框在页面中的位置
+            const pageX = canvasRect.left + (canvasX * scaleX);
+            const pageY = canvasRect.top + (canvasY * scaleY);
+
+            // 创建文字输入框
+            const textInput = document.createElement('input');
+            textInput.type = 'text';
+            textInput.style.cssText = `
+                position: fixed;
+                left: ${pageX}px;
+                top: ${pageY}px;
+                border: 2px solid ${currentColor};
+                background: rgba(255, 255, 255, 0.9);
+                color: ${currentColor};
+                font-size: ${currentFontSize}px;
+                font-family: Arial, sans-serif;
+                padding: 2px 4px;
+                border-radius: 4px;
+                outline: none;
+                z-index: 4000;
+                min-width: 100px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            `;
+            textInput.placeholder = '输入文字...';
+
+            document.body.appendChild(textInput);
+
+            // 自动聚焦
+            setTimeout(() => {
+                textInput.focus();
+                textInput.select();
+            }, 50);
+
+            // 完成输入的函数
+            function finishTextInput() {
+                const text = textInput.value.trim();
+                if (text) {
+                    // 设置文字样式
+                    ctx.font = `${currentFontSize}px Arial`;
+                    ctx.fillStyle = currentColor;
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'top';
+
+                    // 绘制文字
+                    ctx.fillText(text, canvasX, canvasY);
+
+                    // 保存文字信息
+                    texts.push({
+                        text: text,
+                        x: canvasX,
+                        y: canvasY,
+                        fontSize: currentFontSize,
+                        color: currentColor
+                    });
+
+                    saveToHistory();
+                    showToast('文字添加成功');
+                    console.log('添加文字:', text, '位置:', canvasX, canvasY);
+                } else {
+                    showToast('未输入文字');
+                }
+
+                // 移除输入框
+                if (document.body.contains(textInput)) {
+                    document.body.removeChild(textInput);
+                }
+
+                // 重置文字模式
+                resetAllModes();
+                setActiveTool(null);
+            }
+
+            // 监听回车键完成输入
+            textInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    finishTextInput();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    // 取消输入
+                    if (document.body.contains(textInput)) {
+                        document.body.removeChild(textInput);
+                    }
+                    resetAllModes();
+                    setActiveTool(null);
+                    showToast('已取消文字输入');
+                }
+            });
+
+            // 失去焦点时完成输入
+            textInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (document.body.contains(textInput)) {
+                        finishTextInput();
+                    }
+                }, 100);
+            });
+
+            // 自动调整输入框宽度
+            textInput.addEventListener('input', () => {
+                // 创建测量元素
+                const measure = document.createElement('span');
+                measure.style.cssText = `
+                    position: absolute;
+                    visibility: hidden;
+                    white-space: nowrap;
+                    font-size: ${currentFontSize}px;
+                    font-family: Arial, sans-serif;
+                `;
+                measure.textContent = textInput.value || textInput.placeholder;
+                document.body.appendChild(measure);
+
+                const width = Math.max(100, measure.offsetWidth + 20);
+                textInput.style.width = width + 'px';
+
+                document.body.removeChild(measure);
+            });
+        }
+
+        // 绘制箭头
+        function drawArrow(fromX, fromY, toX, toY, isPreview = false) {
+            const headlen = Math.max(12, currentLineWidth * 4); // 根据线宽调整箭头大小
+            const angle = Math.atan2(toY - fromY, toX - fromX);
+
+            // 使用亚像素精度
+            const adjustedFromX = Math.round(fromX) + 0.5;
+            const adjustedFromY = Math.round(fromY) + 0.5;
+            const adjustedToX = Math.round(toX) + 0.5;
+            const adjustedToY = Math.round(toY) + 0.5;
+
+            // 设置高质量绘制
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // 绘制箭头主体
+            ctx.beginPath();
+            ctx.moveTo(adjustedFromX, adjustedFromY);
+            ctx.lineTo(adjustedToX, adjustedToY);
+            ctx.stroke();
+
+            // 绘制箭头头部 - 使用填充三角形而非线条
+            const arrowHead1X = adjustedToX - headlen * Math.cos(angle - Math.PI / 6);
+            const arrowHead1Y = adjustedToY - headlen * Math.sin(angle - Math.PI / 6);
+            const arrowHead2X = adjustedToX - headlen * Math.cos(angle + Math.PI / 6);
+            const arrowHead2Y = adjustedToY - headlen * Math.sin(angle + Math.PI / 6);
+
+            ctx.beginPath();
+            ctx.moveTo(adjustedToX, adjustedToY);
+            ctx.lineTo(arrowHead1X, arrowHead1Y);
+            ctx.lineTo(arrowHead2X, arrowHead2Y);
+            ctx.closePath();
+            ctx.fillStyle = currentColor;
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('页面加载完成，开始初始化工具');
+            initializeTools();
+        });
+
+        // 确保在 IPC 消息接收后也初始化工具
+        ipcRenderer.on('set-image', (event, imageData) => {
+            const img = new Image();
+            img.onload = () => {
+                originalImage = img;
+                currentImage = img;
+                resetCanvas();
+
+                // 设置全局画布抗锯齿
+                setupCanvasQuality();
+
+                history = [];
+                currentHistoryIndex = -1;
+                saveToHistory();
+
+                // 确保工具已初始化
+                setTimeout(() => {
+                    initializeTools();
+                    console.log('图片加载完成，工具初始化完成');
+                }, 100);
+            };
+            img.src = imageData;
+        });
+
+        // 设置画布绘制质量
+        function setupCanvasQuality() {
+            // 启用高质量渲染
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // 设置默认线条样式
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // 针对高DPI屏幕的优化
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            if (devicePixelRatio > 1) {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * devicePixelRatio;
+                canvas.height = rect.height * devicePixelRatio;
+                canvas.style.width = rect.width + 'px';
+                canvas.style.height = rect.height + 'px';
+                ctx.scale(devicePixelRatio, devicePixelRatio);
+            }
+
+            console.log('画布质量设置完成, devicePixelRatio:', devicePixelRatio);
+        }
 
         // 取消按钮
         document.getElementById('cancel-btn').addEventListener('click', () => {
