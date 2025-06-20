@@ -7,7 +7,7 @@ module.exports = {
 
   // 窗口配置
   WINDOW_CONFIG: {
-    width: 800,
+    width: 1024,
     height: 600,
     show: false,
     webPreferences: {
@@ -19,7 +19,9 @@ module.exports = {
   // 文件路径
   PATHS: {
     HISTORY_FILE: path.join(app.getPath("userData"), "history.json"),
-    ICON_PATH: path.join(__dirname, "../../icon.png"),
+    ICON_PATH: app.isPackaged
+      ? path.join(process.resourcesPath, "icon.icns")
+      : path.join(__dirname, "../../icon.png"),
   },
 
   // 快捷键

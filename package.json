@@ -43,8 +43,18 @@
       "package.json",
       "node_modules/**/*"
     ],
+    "asarUnpack": [
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/icons/icon.png",
+        "to": "icon.png"
+      }
+    ],
     "mac": {
       "category": "public.app-category.utilities",
+      "icon": "assets/icons/icon.icns",
       "target": [
         {
           "target": "dmg",

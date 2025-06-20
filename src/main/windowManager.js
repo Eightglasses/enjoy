@@ -10,7 +10,7 @@ class WindowManager {
   createMainWindow() {
     this.mainWindow = new BrowserWindow({
       ...WINDOW_CONFIG,
-      skipTaskbar: true, // 不在任务栏显示
+      skipTaskbar: false, // 在任务栏显示
     });
     this.mainWindow.loadFile("index.html");
 

@@ -1,4 +1,11 @@
-const { app, clipboard, ipcMain, BrowserWindow, dialog } = require("electron");
+const {
+  app,
+  clipboard,
+  ipcMain,
+  BrowserWindow,
+  dialog,
+  shell,
+} = require("electron");
 const windowManager = require("./windowManager");
 const trayManager = require("./trayManager");
 const shortcutManager = require("./shortcutManager");
@@ -6,8 +13,8 @@ const storage = require("../utils/storage");
 const path = require("path");
 const fs = require("fs");
 
-// 隐藏 Dock 图标
-app.dock.hide();
+// 显示 Dock 图标 (之前被隐藏了)
+// app.dock.hide();
 
 // 设置开机启动
 function setAutoLaunch(enabled) {
@@ -15,7 +22,6 @@ function setAutoLaunch(enabled) {
     app.setLoginItemSettings({
       openAtLogin: enabled,
       openAsHidden: true,
-      path: app.getPath("exe"),
     });
   }
 }
@@ -224,12 +230,29 @@ function setupEventListeners() {
     event.sender.send("auto-launch-status", enabled);
   });
 
-  // 监听开机启动开关切换
-  ipcMain.on("toggle-auto-launch", (event) => {
-    const currentStatus = getAutoLaunchStatus();
-    const newStatus = !currentStatus;
-    setAutoLaunch(newStatus);
-    event.sender.send("auto-launch-status", newStatus);
+  // 监听开机启动开关切换（仅开启，不关闭）
+  ipcMain.on("enable-auto-launch", (event) => {
+    setAutoLaunch(true);
+    const status = getAutoLaunchStatus();
+    event.sender.send("auto-launch-enabled", status);
+  });
+
+  // 监听打开存储位置的请求
+  ipcMain.on("open-storage-folder", (event) => {
+    try {
+      // 获取用户数据目录，这是历史记录保存的位置
+      const userDataPath = app.getPath("userData");
+
+      // 使用 shell.openPath 打开文件夹
+      shell.openPath(userDataPath).catch((error) => {
+        console.error("打开存储文件夹失败:", error);
+        // 如果打开失败，可以显示一个消息给用户
+        event.sender.send("folder-open-error", "无法打开存储文件夹");
+      });
+    } catch (error) {
+      console.error("打开存储文件夹失败:", error);
+      event.sender.send("folder-open-error", "无法打开存储文件夹");
+    }
   });
 }
 
