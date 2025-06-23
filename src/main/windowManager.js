@@ -125,8 +125,8 @@ class WindowManager {
 
   createEditWindow(imageData) {
     const editWindow = new BrowserWindow({
-      width: 1000,
-      height: 800,
+      width: 1400,
+      height: 1000,
       show: false,
       webPreferences: {
         nodeIntegration: true,
@@ -136,7 +136,8 @@ class WindowManager {
       },
     });
 
-    editWindow.loadFile("edit.html");
+    editWindow.loadFile("edit-vue.html");
+    console.log("编辑窗口加载: edit-vue.html (Vue版本)");
 
     editWindow.webContents.on("did-finish-load", () => {
       editWindow.webContents.send("set-image", imageData);

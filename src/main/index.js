@@ -333,6 +333,44 @@ function setupEventListeners() {
     windowManager.createEditWindow(imageData);
   });
 
+  // 监听保存到历史记录的请求
+  ipcMain.on("save-to-history", (event, imageData) => {
+    try {
+      console.log("收到保存到历史记录请求，图片数据长度:", imageData.length);
+      console.log("图片数据前缀:", imageData.substring(0, 50));
+
+      // 添加到历史记录
+      const updatedHistory = storage.addToHistory(
+        imageData,
+        global.historyData
+      );
+      if (updatedHistory) {
+        global.historyData = updatedHistory;
+        // 通知主窗口更新历史记录
+        if (
+          windowManager.mainWindow &&
+          !windowManager.mainWindow.isDestroyed()
+        ) {
+          windowManager.mainWindow.webContents.send(
+            "history-updated",
+            updatedHistory
+          );
+          // 更新存储信息
+          const data = JSON.stringify(updatedHistory);
+          windowManager.mainWindow.webContents.send("storage-info", {
+            available: storage.getAvailableStorage(),
+            used: data.length,
+          });
+        }
+        console.log("图片已成功保存到历史记录");
+      } else {
+        console.log("图片保存失败，可能已存在或存储空间不足");
+      }
+    } catch (error) {
+      console.error("保存到历史记录失败:", error);
+    }
+  });
+
   // 监听保存编辑后的图片
   ipcMain.on("save-edited-image", async (event, imageData) => {
     try {
