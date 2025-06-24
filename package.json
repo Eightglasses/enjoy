@@ -41,11 +41,11 @@
       "assets/**/*",
       "*.html",
       "*.js",
-      "package.json",
-      "!node_modules/**/*"
+      "package.json"
     ],
     "asarUnpack": [
-      "icon.png"
+      "**/node_modules/tesseract.js/**/*",
+      "**/node_modules/tesseract.js-core/**/*"
     ],
     "extraResources": [
       {
