@@ -38,6 +38,7 @@
     },
     "files": [
       "src/**/*",
+      "assets/**/*",
       "*.html",
       "*.js",
       "package.json",
