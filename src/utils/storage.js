@@ -1,8 +1,7 @@
 const fs = require("fs");
 const crypto = require("crypto");
 const { PATHS, STORAGE } = require("../config/constants");
-const { app } = require("electron");
-const { BrowserWindow } = require("electron");
+const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const Tesseract = require("tesseract.js");
 
@@ -88,21 +87,31 @@ function isImageExists(imageData, historyData) {
   return historyData.some((item) => getImageHash(item.imageData) === hash);
 }
 
+// 在后台执行OCR并更新记录
+async function _runOcrAndUpdate(record) {
+  try {
+    const result = await Tesseract.recognize(record.imageData, "chi_sim", {
+      logger: (m) => {}, // 静默日志
+    });
+    record.ocrText = result.data.text;
+
+    // OCR完成后，再次保存并通知前端更新，以确保内容可搜索
+    saveHistory(global.historyData);
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow) {
+      mainWindow.webContents.send("history-updated", global.historyData);
+    }
+  } catch (error) {
+    // OCR失败是次要任务，不应打断用户，所以这里只记录错误，不抛出
+  }
+}
+
 // 添加历史记录
-async function addToHistory(imageData, historyData) {
+function addToHistory(imageData, historyData) {
   // 检查图片是否已存在
   if (isImageExists(imageData, historyData)) {
     return null;
   }
-
-  // OCR 识别图片文字
-  let ocrText = "";
-  try {
-    const result = await Tesseract.recognize(imageData, "chi_sim", {
-      logger: (m) => {},
-    });
-    ocrText = result.data.text;
-  } catch (error) {}
 
   const timestamp = new Date().toISOString();
   const newRecord = {
@@ -111,11 +120,8 @@ async function addToHistory(imageData, historyData) {
     id: Date.now().toString(),
     isFavorite: false,
     tags: [],
-    ocrText: ocrText,
+    ocrText: "", // 初始OCR文本为空
   };
-
-  // 计算新记录的大小
-  const newRecordSize = getDataSize(newRecord);
 
   // 检查存储空间
   const availableSpace = getAvailableStorage();
@@ -125,7 +131,11 @@ async function addToHistory(imageData, historyData) {
 
   // 将新的记录添加到开头
   historyData.unshift(newRecord);
-  saveHistory(historyData);
+  saveHistory(historyData); // 立即保存，提供即时反馈
+
+  // 在后台异步执行OCR，不阻塞主流程
+  _runOcrAndUpdate(newRecord);
+
   return historyData;
 }
 

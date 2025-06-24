@@ -26,12 +26,12 @@ class ShortcutManager {
   }
 
   registerPasteShortcut() {
-    this.register(SHORTCUTS.PASTE, async () => {
+    this.register(SHORTCUTS.PASTE, () => {
       const image = global.clipboard.readImage();
       if (!image.isEmpty()) {
         const imageData = image.toDataURL();
         // 添加到历史记录并通知主窗口更新
-        const updatedHistory = await global.storage.addToHistory(
+        const updatedHistory = global.storage.addToHistory(
           imageData,
           global.historyData
         );
