@@ -85,6 +85,9 @@
             opacity: 0;
             transition: opacity 0.2s;
             z-index: 10;
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 4px;
+            border-radius: 20px;
         }
 
         .history-item:hover .history-controls {
@@ -108,6 +111,47 @@
             text-align: center;
             padding: 40px;
             color: #666;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
+
+            .history-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 10px;
+                padding: 10px;
+            }
+
+            .search-filter-bar {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .search-filter-bar .el-input {
+                width: 100%;
+            }
+        }
+
+        .search-filter-bar {
+            flex-direction: column;
+            margin-top: 20px;
+            gap: 15px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-filter-bar .el-input {
+            width: 100%;
         }
     </style>
 </head>
@@ -152,16 +196,21 @@
             <!-- 历史记录网格 -->
             <div class="history-grid">
                 <!-- 空状态 -->
-                <div v-if="history.length === 0" class="empty-state">
-                    <el-empty description="暂无历史记录" />
+                <div v-if="filteredHistory.length === 0" class="empty-state">
+                    <el-empty description="暂无匹配记录" />
                 </div>
 
                 <!-- 历史记录项 -->
-                <div v-for="(item, index) in history" :key="item.id" class="history-item" @click="showImage(index)">
+                <div v-for="(item, index) in filteredHistory" :key="item.id" class="history-item" @click="showImage(index)">
                     <img :src="item.imageData" :alt="`历史图片 ${index + 1}`" />
 
                     <!-- 控制按钮 -->
                     <div class="history-controls" @click.stop>
+                        <el-button @click="toggleFavorite(item.id)" circle size="small" :type="item.isFavorite ? 'warning' : 'default'" title="收藏">
+                            <el-icon>
+                                <Star />
+                            </el-icon>
+                        </el-button>
                         <el-button @click="saveImageFromHistory(item.imageData)" circle size="small" type="success" title="保存图片">
                             <el-icon>
                                 <Download />
@@ -185,6 +234,15 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 搜索与筛选 -->
+            <div class="search-filter-bar">
+                <el-input v-model="searchText" placeholder="通过图片内文字搜索..." clearable style="width: 400px;" class="el-input"></el-input>
+                <el-button-group>
+                    <el-button :type="filter === 'all' ? 'primary' : 'default'" @click="setFilter('all')">全部</el-button>
+                    <el-button :type="filter === 'favorites' ? 'primary' : 'default'" @click="setFilter('favorites')">已收藏</el-button>
+                </el-button-group>
+            </div>
         </div>
     </div>
 
@@ -196,23 +254,29 @@
     <script src="assets/js/element-plus-icons.iife.min.js"></script>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
-        const { ElButton, ElIcon, ElEmpty, ElMessageBox, ElMessage } = ElementPlus;
+        const { createApp, ref, onMounted, computed } = Vue;
+        const { ElButton, ElIcon, ElEmpty, ElMessageBox, ElMessage, ElInput, ElButtonGroup } = ElementPlus;
 
         createApp({
             components: {
                 ElButton,
                 ElIcon,
                 ElEmpty,
+                ElInput,
+                ElButtonGroup,
                 Download: ElementPlusIconsVue.Download,
                 Edit: ElementPlusIconsVue.Edit,
                 Delete: ElementPlusIconsVue.Delete,
                 FolderOpened: ElementPlusIconsVue.FolderOpened,
-                Setting: ElementPlusIconsVue.Setting
+                Setting: ElementPlusIconsVue.Setting,
+                Star: ElementPlusIconsVue.Star,
+                StarFilled: ElementPlusIconsVue.StarFilled,
             },
             setup() {
                 const history = ref([]);
                 const autoLaunchEnabled = ref(false);
+                const searchText = ref('');
+                const filter = ref('all');
                 const storageInfo = ref({
                     usedSize: '0 MB',
                     availableSize: '0 GB',
@@ -221,22 +285,51 @@
 
                 let ipcRenderer = null;
 
+                const filteredHistory = computed(() => {
+                    let result = history.value;
+
+                    // 筛选收藏
+                    if (filter.value === 'favorites') {
+                        result = result.filter(item => item.isFavorite);
+                    }
+
+                    // 搜索文本
+                    if (searchText.value.trim() !== '') {
+                        const query = searchText.value.trim().toLowerCase();
+                        result = result.filter(item => {
+                            const ocrText = item.ocrText || "";
+                            const isMatch = ocrText.toLowerCase().includes(query);
+                            if (!item.ocrText) {
+                                console.warn(`警告: 记录 ${item.id} 没有 ocrText 字段。`);
+                            }
+                            return isMatch;
+                        });
+                    }
+
+                    return result;
+                });
+
+                const setFilter = (newFilter) => {
+                    filter.value = newFilter;
+                };
+
+                const toggleFavorite = (id) => {
+                    ipcRenderer.send('toggle-favorite-status', id);
+                };
+
                 // 初始化
                 onMounted(() => {
                     try {
                         const electron = require('electron');
                         ipcRenderer = electron.ipcRenderer;
-                        console.log('主窗口 Electron 模块加载成功');
 
                         // 监听历史记录加载完成
                         ipcRenderer.on('history-loaded', (event, loadedHistory) => {
-                            console.log('History loaded:', loadedHistory);
                             history.value = loadedHistory;
                         });
 
                         // 监听历史记录更新
                         ipcRenderer.on('history-updated', (event, newHistory) => {
-                            console.log('History updated:', newHistory);
                             history.value = newHistory;
                         });
 
@@ -295,7 +388,6 @@
 
                 // 保存图片
                 const saveImageFromHistory = (imageData) => {
-                    console.log("saveImageFromHistory");
                     if (ipcRenderer) {
                         ipcRenderer.send('save-image-from-history', imageData);
                     }
@@ -361,14 +453,19 @@
                     history,
                     autoLaunchEnabled,
                     storageInfo,
+                    searchText,
+                    filter,
+                    filteredHistory,
+                    setFilter,
+                    toggleFavorite,
+                    openStorageFolder,
+                    clearHistory,
+                    enableAutoLaunch,
+                    formatTime,
                     showImage,
                     saveImageFromHistory,
                     deleteItem,
                     editImage,
-                    openStorageFolder,
-                    clearHistory,
-                    enableAutoLaunch,
-                    formatTime
                 };
             }
         }).use(ElementPlus).mount('#app');

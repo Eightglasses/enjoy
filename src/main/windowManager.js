@@ -14,18 +14,14 @@ class WindowManager {
       skipTaskbar: false, // 在任务栏显示
     });
     this.mainWindow.loadFile("index-vue.html");
-    console.log("主窗口加载: index-vue.html (Vue版本)");
 
     // 窗口关闭时隐藏而不是退出
     this.mainWindow.on("close", (event) => {
       if (!global.app.isQuitting) {
-        console.log("窗口关闭事件 - 阻止关闭并隐藏窗口");
         event.preventDefault();
         this.mainWindow.hide();
         this.isWindowHidden = true; // 标记窗口被隐藏
         return false;
-      } else {
-        console.log("应用正在退出 - 允许窗口关闭");
       }
     });
 
@@ -73,7 +69,6 @@ class WindowManager {
     });
 
     floatingWindow.loadFile("floating-vue.html");
-    console.log("浮动窗口加载: floating-vue.html (Vue版本)");
 
     // 存储窗口和图片的对应关系
     const imageHash = global.storage.getImageHash(imageData);
@@ -85,7 +80,6 @@ class WindowManager {
 
     // 浮动窗口获得焦点时注册快捷键
     floatingWindow.on("focus", () => {
-      console.log("浮动窗口获得焦点，注册快捷键");
       if (global.shortcut) {
         // 注册ESC关闭快捷键
         global.shortcut.register(SHORTCUTS.CLOSE, () => {
@@ -100,7 +94,6 @@ class WindowManager {
 
     // 浮动窗口失去焦点时注销快捷键
     floatingWindow.on("blur", () => {
-      console.log("浮动窗口失去焦点，注销快捷键");
       if (global.shortcut) {
         global.shortcut.unregister(SHORTCUTS.CLOSE);
         global.shortcut.unregisterDevToolsShortcut();
@@ -137,7 +130,6 @@ class WindowManager {
     });
 
     editWindow.loadFile("edit-vue.html");
-    console.log("编辑窗口加载: edit-vue.html (Vue版本)");
 
     editWindow.webContents.on("did-finish-load", () => {
       editWindow.webContents.send("set-image", imageData);
@@ -146,7 +138,6 @@ class WindowManager {
 
     // 编辑窗口获得焦点时注册F12快捷键
     editWindow.on("focus", () => {
-      console.log("编辑窗口获得焦点，注册F12快捷键");
       if (global.shortcut) {
         global.shortcut.registerDevToolsShortcut();
       }
@@ -154,7 +145,6 @@ class WindowManager {
 
     // 编辑窗口失去焦点时注销F12快捷键
     editWindow.on("blur", () => {
-      console.log("编辑窗口失去焦点，注销F12快捷键");
       if (global.shortcut) {
         global.shortcut.unregisterDevToolsShortcut();
       }
@@ -165,11 +155,8 @@ class WindowManager {
 
   showMainWindow() {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      console.log("显示主窗口");
-
       // 如果窗口被最小化，先恢复
       if (this.mainWindow.isMinimized()) {
-        console.log("恢复最小化的窗口");
         this.mainWindow.restore();
       }
 
@@ -185,14 +172,11 @@ class WindowManager {
           this.mainWindow.setAlwaysOnTop(false);
         }
       }, 100);
-    } else {
-      console.log("主窗口不存在或已销毁，无法显示");
     }
   }
 
   hideMainWindow() {
     if (this.mainWindow) {
-      console.log("隐藏主窗口");
       this.mainWindow.hide();
       this.isWindowHidden = true; // 标记窗口被隐藏
     }
@@ -203,30 +187,17 @@ class WindowManager {
       const isVisible = this.mainWindow.isVisible();
       const isMinimized = this.mainWindow.isMinimized();
 
-      console.log("切换主窗口状态:", {
-        isVisible,
-        isMinimized,
-        isWindowHidden: this.isWindowHidden,
-        windowExists: !!this.mainWindow,
-      });
-
       // 使用状态跟踪来改善判断逻辑
       if (this.isWindowHidden || !isVisible || isMinimized) {
-        console.log("窗口被隐藏/不可见/最小化 -> 显示窗口");
         this.showMainWindow();
       } else if (isVisible && !isMinimized) {
-        console.log("窗口可见且未最小化 -> 隐藏窗口");
         this.hideMainWindow();
       } else {
         // 备用逻辑：强制显示
-        console.log("状态不明确，强制显示窗口");
-        this.showMainWindow();
+        const mainWindow = this.createMainWindow();
+        mainWindow.show();
+        this.isWindowHidden = false;
       }
-    } else {
-      console.log("主窗口不存在或已销毁，重新创建");
-      const mainWindow = this.createMainWindow();
-      mainWindow.show();
-      this.isWindowHidden = false;
     }
   }
 }

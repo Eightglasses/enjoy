@@ -26,12 +26,12 @@ class ShortcutManager {
   }
 
   registerPasteShortcut() {
-    this.register(SHORTCUTS.PASTE, () => {
+    this.register(SHORTCUTS.PASTE, async () => {
       const image = global.clipboard.readImage();
       if (!image.isEmpty()) {
         const imageData = image.toDataURL();
         // 添加到历史记录并通知主窗口更新
-        const updatedHistory = global.storage.addToHistory(
+        const updatedHistory = await global.storage.addToHistory(
           imageData,
           global.historyData
         );
@@ -58,9 +58,7 @@ class ShortcutManager {
   }
 
   registerDevToolsShortcut() {
-    console.log("注册F12开发者工具快捷键");
     this.register(SHORTCUTS.DEV_TOOLS, () => {
-      console.log("F12快捷键被触发");
       // 获取当前活动的窗口
       const focusedWindow =
         require("electron").BrowserWindow.getFocusedWindow();
@@ -74,7 +72,6 @@ class ShortcutManager {
   }
 
   unregisterDevToolsShortcut() {
-    console.log("注销F12开发者工具快捷键");
     this.unregister(SHORTCUTS.DEV_TOOLS);
   }
 }
